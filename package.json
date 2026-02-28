@@ -12,10 +12,18 @@
   },
   "dependencies": {
     "@types/cors": "^2.8.19",
+    "asposecellscloud": "^26.2.0",
     "body-parser": "^2.2.2",
+    "convert-excel-to-json": "^1.7.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "fs-extra": "^11.3.3",
+    "js-xlsx": "^0.8.22",
+    "morgan": "^1.10.1",
     "mssql": "^12.2.0",
+    "multer": "^2.1.0",
+    "read-excel-file": "^7.0.0",
+    "sequelize": "^6.37.7",
     "zod": "^4.3.6"
   },
   "devDependencies": {

@@ -5,7 +5,7 @@ const fetchBooks = () => {
   return books;
 };
 
-const getBooks = async ({
+/*const getBooks = async ({
   TITLE,
   AUTHOR_NAME,
   CATEGORY_ID,
@@ -79,6 +79,95 @@ const getBooks = async ({
     page,
     pageSize,
   };
+};*/
+const getBooks = async ({
+  TITLE,
+  AUTHOR_NAME,
+  CATEGORY_ID,
+  page = 1,
+  pageSize = 10,
+}) => {
+  const pool = await mssql.connect(mssqlConfig);
+
+  let whereClause = "WHERE BOOKS.FLAG_USE = 1";
+
+  if (TITLE || AUTHOR_NAME) {
+    whereClause += `
+      AND (
+        BOOKS.TITLE LIKE @SEARCH
+        OR AUTHORS.AUTHOR_NAME LIKE @SEARCH
+      )
+    `;
+  }
+
+  if (CATEGORY_ID) {
+    whereClause += `
+      AND BOOKS.CATEGORY_ID = @CATEGORY_ID
+    `;
+  }
+
+  const offset = (page - 1) * pageSize;
+
+  const dataQuery = `
+    SELECT
+      BOOKS.BOOK_ID,
+      BOOKS.TITLE,
+      BOOKS.PRICE,
+      BOOKS.STOCK_QTY,
+      BOOKS.AUTHOR_ID,
+      BOOKS.CATEGORY_ID,
+      AUTHORS.AUTHOR_NAME,
+      CATEGORIES.CATEGORY_NAME
+    FROM BOOKS
+    INNER JOIN AUTHORS ON BOOKS.AUTHOR_ID = AUTHORS.AUTHOR_ID
+    INNER JOIN CATEGORIES ON BOOKS.CATEGORY_ID = CATEGORIES.CATEGORY_ID
+    ${whereClause}
+    ORDER BY BOOKS.BOOK_ID
+    OFFSET @offset ROWS
+    FETCH NEXT @pageSize ROWS ONLY
+  `;
+
+  const dataRequest = pool.request();
+
+  if (TITLE || AUTHOR_NAME) {
+    dataRequest.input("SEARCH", mssql.NVarChar, `%${TITLE || AUTHOR_NAME}%`);
+  }
+
+  if (CATEGORY_ID) {
+    dataRequest.input("CATEGORY_ID", mssql.Int, CATEGORY_ID);
+  }
+
+  dataRequest.input("offset", mssql.Int, offset);
+  dataRequest.input("pageSize", mssql.Int, pageSize);
+
+  const dataResult = await dataRequest.query(dataQuery);
+
+  const countQuery = `
+    SELECT COUNT(*) AS total
+    FROM BOOKS
+    INNER JOIN AUTHORS ON BOOKS.AUTHOR_ID = AUTHORS.AUTHOR_ID
+    INNER JOIN CATEGORIES ON BOOKS.CATEGORY_ID = CATEGORIES.CATEGORY_ID
+    ${whereClause}
+  `;
+
+  const countRequest = pool.request();
+
+  if (TITLE || AUTHOR_NAME) {
+    countRequest.input("SEARCH", mssql.NVarChar, `%${TITLE || AUTHOR_NAME}%`);
+  }
+
+  if (CATEGORY_ID) {
+    countRequest.input("CATEGORY_ID", mssql.Int, CATEGORY_ID);
+  }
+
+  const countResult = await countRequest.query(countQuery);
+
+  return {
+    data: dataResult.recordset,
+    total: countResult.recordset[0].total,
+    page,
+    pageSize,
+  };
 };
 
 const getTotalBooks = async () => {
@@ -99,6 +188,18 @@ const getTotalBooks = async () => {
 const createBook = async (data) => {
   const { TITLE, AUTHOR_ID, CATEGORY_ID, PRICE, STOCK_QTY } = data;
   const pool = await mssql.connect(mssqlConfig);
+
+  const duplicate = await pool
+    .request()
+    .input("TITLE", mssql.NVarChar(300), TITLE.trim()).query(`
+      SELECT BOOK_ID FROM BOOKS 
+      WHERE TITLE = @TITLE AND FLAG_USE = 1
+    `);
+
+  if (duplicate.recordset.length > 0) {
+    throw new Error(`Book title "${TITLE}" already exists`);
+  }
+
   const result = await pool
     .request()
     .input("TITLE", mssql.NVarChar(300), TITLE)
@@ -132,6 +233,21 @@ const updateBook = async (id, data) => {
   const { TITLE, AUTHOR_ID, CATEGORY_ID, PRICE, STOCK_QTY } = data;
   //let id = req.params.id;
   const pool = await mssql.connect(mssqlConfig);
+
+  const duplicate = await pool
+    .request()
+    .input("TITLE", mssql.NVarChar(300), TITLE.trim())
+    .input("ID", mssql.Int, id).query(`
+    SELECT BOOK_ID FROM BOOKS 
+    WHERE TITLE = @TITLE 
+    AND BOOK_ID <> @ID
+    AND FLAG_USE = 1
+  `);
+
+  if (duplicate.recordset.length > 0) {
+    throw new Error(`Book title "${TITLE}" already exists`);
+  }
+
   const result = await pool
     .request()
     .input("id", mssql.Int, id)
