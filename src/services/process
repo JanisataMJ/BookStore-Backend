@@ -1,0 +1,22 @@
+{
+  "function_name": {
+    "scanin": {
+      "accessory_check": {
+        "Body_SN": true,
+        "Lens_SN1": true,
+        "Lens_SN2": true,
+        "Card_Warrantee": true
+      }
+    },
+    "sampling": {
+      "Robbery_Check": true,
+      "Card_Warrantee": true
+    },
+    "scanout": {
+      "Robbery_Check": true
+    }
+  }
+}
+
+
+

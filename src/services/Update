@@ -1,0 +1,193 @@
+USE [BookStore]
+GO
+/****** Object:  StoredProcedure [dbo].[SETTING_SCANIO_Update_test]    Script Date: 3/8/2026 10:10:53 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE [dbo].[SETTING_SCANIO_Update_test]
+ @mode       INT,               
+    @json_data  NVARCHAR(MAX)      
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- 1) validate JSON 
+    IF @json_data IS NULL OR ISJSON(@json_data) <> 1
+    BEGIN
+        RAISERROR ('Invalid JSON payload.', 16, 1);
+        RETURN;
+    END
+
+    -- 2) read filters from JSON
+    DECLARE
+		@item_pk			INT             = TRY_CONVERT(INT, JSON_VALUE(@json_data, '$.item_pk')),
+        @setting_pk			INT             = TRY_CONVERT(INT, JSON_VALUE(@json_data, '$.setting_pk')),
+		@biz				NVARCHAR(100)   = LTRIM(RTRIM(JSON_VALUE(@json_data, '$.biz'))),
+		@config_json		NVARCHAR(MAX)	= UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.config_json')))),
+        @level_part			NVARCHAR(100)   = UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.level_part')))),
+        @tolerance			DECIMAL(10,2)   = UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.tolerance')))),
+        @unit				NVARCHAR(100)   = UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.unit')))),
+        @flag_active		BIT				= UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.flag_active')))),
+		@product_code		NVARCHAR(100)   = UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.product_code')))),
+		@body_sn			BIT				= UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.body_sn')))),
+		@lens_sn1			BIT				= UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.lens_sn1')))),
+		@lens_sn2			BIT				= UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.lens_sn2')))),
+		@card_warrantee		BIT				= UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.card_warrantee')))),
+		@update_at			NVARCHAR(100)	= UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.update_at')))),
+		@update_by			NVARCHAR(100)	= UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.update_by'))));
+
+		
+    -- 4) put
+	IF @mode = 1 -- update tolerance weight by level_part
+	BEGIN
+		SELECT
+			@level_part = JSON_VALUE(@json_data,'$.level_part'),
+			@tolerance = JSON_VALUE(@json_data,'$.tolerance'),
+			@unit = JSON_VALUE(@json_data,'$.unit')
+
+		UPDATE i
+		SET config_json = JSON_MODIFY(
+			config_json,
+			'$.tolerance_spec',
+			JSON_QUERY(s.new_tolerance_spec)
+		),
+		update_date = GETDATE(),
+		update_by = 'admin'
+		FROM SAMPLING_ITEM_MASTER_test i
+		CROSS APPLY (
+			SELECT (
+				SELECT
+					JSON_VALUE(value,'$.part') AS part, 
+					@tolerance AS tolerance,
+					@unit AS unit,
+					CAST(JSON_VALUE(value,'$.flag_active') AS BIT) AS flag_active
+				FROM OPENJSON(i.config_json,'$.tolerance_spec')
+				FOR JSON PATH
+			) AS new_tolerance_spec
+		) s
+		WHERE flag_active = 1
+		AND biz = 'IM-C'
+		AND level_part = @level_part
+
+		SELECT TOP 1
+			item_pk,
+			level_part,
+			JSON_QUERY(config_json,'$.tolerance_spec') AS tolerance_spec
+		FROM SAMPLING_ITEM_MASTER_test
+		WHERE flag_active = 1
+		AND biz = 'IM-C'
+		AND level_part = @level_part
+	END -- end @mode 1
+
+
+	IF @mode = 2 -- update accessory by product code
+	BEGIN
+		SELECT
+			@setting_pk = JSON_VALUE(@json_data, '$.setting_pk'),
+			@product_code = JSON_VALUE(@json_data,'$.product_code'),
+			@body_sn = TRY_CAST(JSON_VALUE(@json_data,'$.body_sn') AS BIT),
+			@lens_sn1 = TRY_CAST(JSON_VALUE(@json_data,'$.lens_sn1') AS BIT),
+			@lens_sn2 = TRY_CAST(JSON_VALUE(@json_data,'$.lens_sn2') AS BIT),
+			@card_warrantee = TRY_CAST(JSON_VALUE(@json_data,'$.card_warrantee') AS BIT)
+
+		UPDATE p
+		SET config_json =
+			JSON_MODIFY(
+			JSON_MODIFY(
+			JSON_MODIFY(
+			JSON_MODIFY(
+			JSON_MODIFY( config_json,
+				'$.function_name.scanin.accessory_check.Body_SN',@body_sn),
+				'$.function_name.scanin.accessory_check.Lens_SN1',@lens_sn1),
+				'$.function_name.scanin.accessory_check.Lens_SN2',@lens_sn2),
+			    '$.function_name.scanin.accessory_check.Card_Warrantee',@card_warrantee),
+				'$.function_name.sampling.Card_Warrantee',@card_warrantee),
+			update_date = GETDATE(),
+			update_by = 'admin'
+		FROM SAMPLING_PROCESS_MASTER_test p
+		WHERE p.product_code = @product_code
+		AND p.setting_pk = @setting_pk
+		AND biz = 'IM-C'
+	
+		SELECT 
+			setting_pk,
+			product_code,
+			(
+				SELECT 
+					CAST(JSON_VALUE(config_json,'$.function_name.scanin.accessory_check.Body_SN') AS BIT) AS Body_SN,
+					CAST(JSON_VALUE(config_json,'$.function_name.scanin.accessory_check.Lens_SN1') AS BIT) AS Lens_SN1,
+					CAST(JSON_VALUE(config_json,'$.function_name.scanin.accessory_check.Lens_SN2') AS BIT) AS Lens_SN2,
+					CAST(JSON_VALUE(config_json,'$.function_name.scanin.accessory_check.Card_Warrantee') AS BIT) AS Card_Warrantee
+				FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+			) AS accessory_check,
+			CAST(JSON_VALUE(config_json,'$.function_name.sampling.Card_Warrantee') AS BIT) AS sampling_card_warrantee
+		FROM SAMPLING_PROCESS_MASTER_test
+		WHERE product_code = @product_code
+		AND setting_pk = @setting_pk
+		AND biz = 'IM-C'
+	END -- end @mode 2
+
+
+	IF @mode = 3 -- update robbery by product code
+BEGIN
+
+    SELECT
+        @setting_pk = JSON_VALUE(@json_data, '$.setting_pk'),
+        @product_code = JSON_VALUE(@json_data,'$.product_code'),
+        @flag_active = TRY_CAST(JSON_VALUE(@json_data,'$.flag_active') AS BIT);
+
+
+    -- ตรวจสอบว่ามี scanout หรือไม่
+    IF NOT EXISTS (
+        SELECT 1
+        FROM SAMPLING_PROCESS_MASTER_test
+        WHERE product_code = @product_code
+        AND setting_pk = @setting_pk
+        AND biz = 'IM-C'
+        AND JSON_QUERY(config_json,'$.function_name.scanout') IS NOT NULL
+    )
+    BEGIN
+        SELECT
+            0 AS status,
+            'Scanout not found for this product' AS message
+        RETURN
+    END
+
+
+    -- update เมื่อมี scanout เท่านั้น
+    UPDATE SAMPLING_PROCESS_MASTER_test 
+    SET 
+        flag_active = @flag_active,
+        config_json =
+            JSON_MODIFY(
+                JSON_MODIFY(
+                    config_json,
+                    '$.function_name.scanout.Robbery_Check',
+                    @flag_active
+                ),
+                '$.function_name.sampling.Robbery_Check',
+                @flag_active
+            ),
+        update_date = GETDATE(),
+        update_by = 'admin'
+    WHERE product_code = @product_code
+    AND setting_pk = @setting_pk
+    AND biz = 'IM-C'
+
+
+    SELECT 
+        1 AS status,
+        'Update success' AS message,
+        setting_pk,
+        product_code,
+        flag_active
+    FROM SAMPLING_PROCESS_MASTER_test
+    WHERE product_code = @product_code
+    AND setting_pk = @setting_pk
+
+END -- end @mode 3
+
+
+END
+

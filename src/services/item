@@ -1,0 +1,150 @@
+{
+  "items": [
+    {
+      "item_key": "IM-C_0001",
+      "item_name": "Appearance",
+      "display_order": 1,
+      "children": [],
+      "defect_symptom": [
+        {
+          "symptom_key": "DF0001",
+          "symptom_name": "Crack and Broken",
+          "flag_active": true
+        },
+        {
+          "symptom_key": "DF0002",
+          "symptom_name": "Dent",
+          "flag_active": true
+        },
+        {
+          "symptom_key": "DF0003",
+          "symptom_name": "Scratch",
+          "flag_active": true
+        },
+        {
+          "symptom_key": "DF0004",
+          "symptom_name": "Peel off ",
+          "flag_active": true
+        },
+        {
+          "symptom_key": "DF0005",
+          "symptom_name": "Printing incomplete",
+          "flag_active": true
+        },
+        {
+          "symptom_key": "DF0006",
+          "symptom_name": "Gap",
+          "flag_active": true
+        },
+        {
+          "symptom_key": "DF0007",
+          "symptom_name": "Missing",
+          "flag_active": true
+        },
+        {
+          "symptom_key": "DF0008",
+          "symptom_name": "Floating",
+          "flag_active": true
+        },
+        {
+          "symptom_key": "DF0009",
+          "symptom_name": "Excess",
+          "flag_active": true
+        },
+        {
+          "symptom_key": "DF0010",
+          "symptom_name": "Part overlap",
+          "flag_active": true
+        },
+        {
+          "symptom_key": "DF0011",
+          "symptom_name": "Unsmooth",
+          "flag_active": true
+        },
+        {
+          "symptom_key": "DF0012",
+          "symptom_name": "Dust",
+          "flag_active": true
+        }
+      ]
+    },
+    {
+      "item_key": "IM-C_0002",
+      "item_name": "Function",
+      "display_order": 2,
+      "children": [],
+      "defect_symptom": [
+        {
+          "symptom_key": "DF0013",
+          "symptom_name": "Camera error",
+          "flag_active": true
+        },
+        {
+          "symptom_key": "DF0014",
+          "symptom_name": "Auto reboot",
+          "flag_active": true
+        },
+        {
+          "symptom_key": "DF0015",
+          "symptom_name": "Eye sensor distance NG",
+          "flag_active": true
+        }
+      ]
+    },
+    {
+      "item_key": "IM-C_0003",
+      "item_name": "Dust",
+      "display_order": 3,
+      "children": [],
+      "defect_symptom": [
+        {
+          "symptom_key": "DF00019",
+          "symptom_name": "Dust",
+          "flag_active": true
+        }
+      ]
+    },
+    {
+      "item_key": "IM-C_0004",
+      "item_name": "Performance",
+      "display_order": 4,
+      "children": [],
+      "defect_symptom": [
+        {
+          "symptom_key": "DF0016",
+          "symptom_name": "Aori NG",
+          "flag_active": true
+        },
+        {
+          "symptom_key": "DF0017",
+          "symptom_name": "Water level NG",
+          "flag_active": true
+        },
+        {
+          "symptom_key": "DF0018",
+          "symptom_name": "Shutter speed NG",
+          "flag_active": true
+        }
+      ]
+    }
+  ],
+  "tolerance_spec": [
+    {
+      "part": "Master_Carton",
+      "tolerance": 10,
+      "unit": "g",
+      "flag_active": true
+    },
+    {
+      "part": "Individual",
+      "tolerance": 2,
+      "unit": "g",
+      "flag_active": true
+    }
+  ],
+  "master_print": [
+    {
+      "no": "F02WIO6C024-02"
+    }
+  ]
+}

@@ -1,0 +1,128 @@
+USE [BookStore]
+GO
+/****** Object:  StoredProcedure [dbo].[SETTING_SCANIO_GetAll_test]    Script Date: 3/8/2026 10:10:39 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE [dbo].[SETTING_SCANIO_GetAll_test]
+    @mode       INT,               
+    @json_data  NVARCHAR(MAX)      
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- 1) validate JSON 
+    IF @json_data IS NULL OR ISJSON(@json_data) <> 1
+    BEGIN
+        RAISERROR ('Invalid JSON payload.', 16, 1);
+        RETURN;
+    END
+
+    -- 2) read filters from JSON
+    DECLARE
+		@item_pk			INT             = TRY_CONVERT(INT, JSON_VALUE(@json_data, '$.item_pk')),
+        @setting_pk			INT             = TRY_CONVERT(INT, JSON_VALUE(@json_data, '$.setting_pk')),
+		@biz				NVARCHAR(100)   = LTRIM(RTRIM(JSON_VALUE(@json_data, '$.biz'))),
+		@config_json		NVARCHAR(MAX)	= UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.config_json')))),
+        @level_part			NVARCHAR(100)   = UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.level_part')))),
+        @tolerance			DECIMAL(10,2)   = UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.tolerance')))),
+        @unit				NVARCHAR(100)   = UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.unit')))),
+        @flag_active		BIT				= UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.flag_active')))),
+		@product_code		NVARCHAR(100)   = UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.product_code')))),
+		@body_sn			BIT				= UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.body_sn')))),
+		@lens_sn1			BIT				= UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.lens_sn1')))),
+		@lens_sn2			BIT				= UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.lens_sn2')))),
+		@card_warrantee		BIT				= UPPER(LTRIM(RTRIM(JSON_VALUE(@json_data, '$.card_warrantee'))));
+
+		
+    -- 4) get data all
+    IF @mode = 1 -- get all tolerance weight
+    BEGIN
+		WITH cte AS
+		(
+			SELECT
+				i.item_pk,
+				i.level_part,
+				i.config_json,
+				ROW_NUMBER() OVER(PARTITION BY i.level_part ORDER BY i.item_pk) rn
+			FROM SAMPLING_ITEM_MASTER_test i
+			WHERE i.flag_active = 1
+			AND i.biz = 'IM-C'
+			AND i.level_part IN ('FG','SFG')
+		)
+
+		SELECT
+			item_pk,
+			level_part,
+			TRY_CAST(JSON_VALUE(config_json,'$.tolerance_spec[0].tolerance') AS DECIMAL(10,2)) AS tolerance,
+			JSON_VALUE(config_json,'$.tolerance_spec[0].unit') AS unit,
+			TRY_CAST(JSON_VALUE(config_json,'$.tolerance_spec[0].flag_active') AS BIT) AS flag_active
+		FROM cte
+		WHERE rn = 1
+
+		RETURN;
+    END -- end @mode 1 
+
+
+	IF @mode = 2 -- get all accessory
+	BEGIN
+		DECLARE @cols NVARCHAR(MAX);
+		DECLARE @colsSelect NVARCHAR(MAX);
+		DECLARE @sql NVARCHAR(MAX);
+
+		SELECT 
+			@cols = STRING_AGG(QUOTENAME([key]), ','),
+			@colsSelect = STRING_AGG(
+				'CASE WHEN pvt.' + QUOTENAME([key]) + ' = 1 THEN ''true'' ELSE ''false'' END AS ' + QUOTENAME([key]),
+				','
+			)
+		FROM (
+			SELECT DISTINCT j.[key]
+			FROM SAMPLING_PROCESS_MASTER_test p
+			CROSS APPLY OPENJSON(p.config_json, '$.function_name.scanin.accessory_check') j
+			WHERE p.flag_active = 1
+			AND p.biz = 'IM-C'
+		) x;
+
+	   SET @sql = '
+			SELECT setting_pk, product_code, level_part,' + @colsSelect + '
+			FROM
+			(
+				SELECT
+					p.setting_pk,
+					p.product_code,
+					p.level_part,
+					j.[key] AS accessory_name,
+					TRY_CAST(j.[value] AS INT) AS flag_value
+				FROM SAMPLING_PROCESS_MASTER_test p
+				OUTER APPLY OPENJSON(p.config_json, ''$.function_name.scanin.accessory_check'') j
+				WHERE p.flag_active = 1
+				AND p.biz = ''IM-C''
+			) src
+			PIVOT
+			(
+				MAX(flag_value)
+				FOR accessory_name IN (' + @cols + ')
+			) pvt
+			';
+
+		EXEC sp_executesql @sql;
+	END  -- end @mode 2
+
+	IF @mode = 3 -- masterprocess
+    BEGIN
+        SELECT
+		setting_pk,
+		product_code,
+		level_part,
+		flag_active
+        FROM SAMPLING_PROCESS_MASTER_test
+        WHERE flag_active = 1
+		AND biz = 'IM-C'
+
+        RETURN;
+    END -- end @mode 3 
+
+
+END

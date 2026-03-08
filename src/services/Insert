@@ -1,0 +1,315 @@
+USE [BookStore]
+GO
+/****** Object:  StoredProcedure [dbo].[SETTING_SCANIO_Insert_test]    Script Date: 3/8/2026 10:10:48 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE [dbo].[SETTING_SCANIO_Insert_test]
+	@mode       INT,               
+    @json_data  NVARCHAR(MAX)   
+AS
+BEGIN
+	SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    -- 1) validate JSON 
+    IF @json_data IS NULL OR ISJSON(@json_data) <> 1
+    BEGIN
+        RAISERROR ('Invalid JSON payload.', 16, 1);
+        RETURN;
+    END
+
+    -- 2) read filters from JSON 
+    DECLARE
+        @setting_pk INT = TRY_CONVERT(INT, JSON_VALUE(@json_data,'$.setting_pk')),
+        @biz NVARCHAR(50) = JSON_VALUE(@json_data,'$.biz'),
+        @level_part NVARCHAR(50) = JSON_VALUE(@json_data,'$.level_part'),
+        @product_code NVARCHAR(100) = JSON_VALUE(@json_data,'$.product_code'),
+        @flag_active BIT = TRY_CAST(JSON_VALUE(@json_data,'$.flag_active') AS BIT),
+
+        @body_sn BIT = CASE JSON_VALUE(@json_data,'$.body_sn')
+                        WHEN 'true' THEN 1 ELSE 0 END,
+
+        @lens_sn1 BIT = CASE JSON_VALUE(@json_data,'$.lens_sn1')
+                        WHEN 'true' THEN 1 ELSE 0 END,
+
+        @lens_sn2 BIT = CASE JSON_VALUE(@json_data,'$.lens_sn2')
+                        WHEN 'true' THEN 1 ELSE 0 END,
+
+        @card_warrantee BIT = CASE JSON_VALUE(@json_data,'$.card_warrantee')
+                        WHEN 'true' THEN 1 ELSE 0 END,
+
+        @config_json NVARCHAR(MAX),
+		@accessory_json NVARCHAR(MAX)
+
+		
+		 -- 4) insert mode
+   IF @mode = 1 -- insert product code accessory (row)
+BEGIN
+
+    /* -------------------------------------------------
+       1. ถ้า product ยังไม่มี → สร้าง row ก่อน
+    -------------------------------------------------- */
+
+    IF NOT EXISTS(
+        SELECT 1
+        FROM SAMPLING_PROCESS_MASTER_test
+        WHERE biz=@biz
+        AND product_code=@product_code
+        AND level_part=@level_part
+    )
+    BEGIN
+
+        SET @config_json =
+        (
+            SELECT
+                JSON_QUERY('{}') scanin,
+                JSON_QUERY('{}') sampling,
+                JSON_QUERY('{}') scanout
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        )
+
+        SET @config_json =
+        (
+            SELECT JSON_QUERY(@config_json) function_name
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        )
+
+        INSERT INTO SAMPLING_PROCESS_MASTER_test
+        (
+            biz,
+            level_part,
+            product_code,
+            config_json,
+            created_by,
+            created_date
+        )
+        VALUES
+        (
+            @biz,
+            @level_part,
+            @product_code,
+            @config_json,
+            'admin',
+            GETDATE()
+        )
+
+    END
+
+
+    /* -------------------------------------------------
+       2. ดึง accessory structure ล่าสุดจาก table
+    -------------------------------------------------- */
+
+    SELECT TOP 1
+@accessory_json =
+JSON_QUERY(config_json,'$.function_name.scanin.accessory_check')
+FROM SAMPLING_PROCESS_MASTER_test
+WHERE JSON_QUERY(config_json,'$.function_name.scanin.accessory_check') IS NOT NULL
+
+    /* -------------------------------------------------
+       3. ถ้ายังไม่มี structure เลย → ใช้ default
+    -------------------------------------------------- */
+
+    IF @accessory_json IS NULL
+    BEGIN
+
+        SET @accessory_json =
+        (
+            SELECT
+                @body_sn Body_SN,
+                @lens_sn1 Lens_SN1,
+                @lens_sn2 Lens_SN2,
+                @card_warrantee Card_Warrantee
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        )
+
+    END
+
+
+    /* -------------------------------------------------
+       4. update scanin + sampling
+    -------------------------------------------------- */
+UPDATE SAMPLING_PROCESS_MASTER_test
+SET config_json =
+JSON_MODIFY(
+    JSON_MODIFY(
+        config_json,
+        '$.function_name.scanin.accessory_check',
+        JSON_QUERY(@accessory_json)
+    ),
+    '$.function_name.sampling.Card_Warrantee',
+    @card_warrantee
+),
+update_date = GETDATE()
+WHERE biz=@biz
+AND product_code=@product_code
+AND level_part=@level_part
+
+    /* -------------------------------------------------
+       5. return result
+    -------------------------------------------------- */
+
+    SELECT
+        1 status,
+        'scanin updated' message,
+        *
+    FROM SAMPLING_PROCESS_MASTER_test
+    WHERE biz=@biz
+    AND product_code=@product_code
+    AND level_part=@level_part
+END -- end @mode 1
+
+
+
+
+
+	IF @mode = 2 -- insert item accessory (col)
+BEGIN
+
+    DECLARE @column_name NVARCHAR(100)
+
+    SET @column_name = JSON_VALUE(@json_data,'$.item_name')
+
+    IF @column_name IS NULL OR @column_name = ''
+    BEGIN
+        SELECT 
+            0 AS status,
+            'item_name empty' AS message
+        RETURN
+    END
+
+    --------------------------------------------------
+    -- check duplicate column
+    --------------------------------------------------
+    IF EXISTS (
+        SELECT 1
+        FROM SAMPLING_PROCESS_MASTER_test
+        WHERE JSON_VALUE(
+                config_json,
+                '$.function_name.scanin.accessory_check.' + @column_name
+              ) IS NOT NULL
+        AND biz = @biz
+    )
+    BEGIN
+        SELECT 
+            0 AS status,
+            'duplicate field' AS message
+        RETURN
+    END
+
+
+    --------------------------------------------------
+    -- update add new column
+    --------------------------------------------------
+    UPDATE SAMPLING_PROCESS_MASTER_test
+    SET config_json =
+        JSON_MODIFY(
+            config_json,
+            '$.function_name.scanin.accessory_check.' + @column_name,
+            CAST(0 AS BIT)
+        ),
+        update_date = GETDATE()
+    WHERE JSON_QUERY(config_json,'$.function_name.scanin.accessory_check') IS NOT NULL
+    AND biz = @biz
+
+
+    --------------------------------------------------
+    -- result
+    --------------------------------------------------
+    SELECT
+        1 AS status,
+        'column added' AS message,
+        @@ROWCOUNT AS updated_rows
+
+END -- end mode 2
+
+
+
+	IF @mode = 3 -- update robbery by product code
+BEGIN
+
+    IF @flag_active IS NULL
+        SET @flag_active = 1
+
+
+    IF NOT EXISTS(
+        SELECT 1
+        FROM SAMPLING_PROCESS_MASTER_test
+        WHERE product_code=@product_code
+        AND biz='IM-C'
+    )
+    BEGIN
+
+        SET @config_json =
+        (
+            SELECT
+                JSON_QUERY('{}') scanin,
+                JSON_QUERY('{}') sampling,
+                JSON_QUERY('{}') scanout
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        )
+
+        SET @config_json =
+        (
+            SELECT JSON_QUERY(@config_json) function_name
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        )
+
+        INSERT INTO SAMPLING_PROCESS_MASTER_test
+        (
+            biz,
+            level_part,
+            product_code,
+            flag_active,
+            config_json,
+            created_date,
+            created_by
+        )
+        VALUES
+        (
+            'IM-C',
+            @level_part,
+            @product_code,
+            @flag_active,
+            @config_json,
+            GETDATE(),
+            'admin'
+        )
+
+    END
+
+
+    UPDATE SAMPLING_PROCESS_MASTER_test
+	SET
+	flag_active=@flag_active,
+	config_json =
+	JSON_MODIFY(
+		JSON_MODIFY(
+			config_json,
+			'$.function_name.scanout.Robbery_Check',
+			@flag_active
+		),
+		'$.function_name.sampling.Robbery_Check',
+		@flag_active
+	),
+	update_date=GETDATE(),
+	update_by='admin'
+	WHERE product_code=@product_code
+	AND biz='IM-C'
+
+
+    SELECT
+        1 status,
+        'scanout updated' message,
+        *
+    FROM SAMPLING_PROCESS_MASTER_test
+    WHERE product_code=@product_code
+    AND biz='IM-C'
+
+END -- end @mode 3
+END;
+
+
+

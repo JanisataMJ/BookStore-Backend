@@ -1,0 +1,415 @@
+const { QueryTypes } = require("sequelize");
+const ResponseHelper = require("../../../utils/responseHelper");
+class SettingService {
+  /**
+   * @param {object} db
+   * @param {object} basicSkillMasterData
+   * @returns {Promise<object>}
+   */
+
+
+  async getSamplingProcessMaster(db, datareq) {
+    try {
+      if (!db) throw new Error("Database connection is missing");
+      //   const bizData = JSON.stringify({
+      //     biz: datareq.biz
+      //   });
+
+
+      //const sql = `SELECT * FROM SAMPLING_PROCESS_MASTER WHERE FLAG_ACTIVE = 1 and BIZ = @biz`;
+
+
+      //   const replacements = {
+      //     jsonData,
+      //   };
+      const results = await db.query(
+        `SELECT * FROM SAMPLING_PROCESS_MASTER_test WHERE FLAG_ACTIVE = 1 AND BIZ = :biz`,
+        {
+          type: QueryTypes.SELECT,
+          replacements: {
+            biz: datareq.biz,
+          },
+        },
+      );
+      return {
+        status: true,
+        message: "Success",
+        data: results || [],
+      };
+      // return results;
+    } catch (error) {
+      console.error("Service getdata_scanin_fg Error:", error);
+      return {
+        status: false,
+        message: error.message || "An error occurred",
+        data: [],
+      };
+    }
+  }
+
+
+  async getSamplingItemMaster(db, datareq) {
+    try {
+      if (!db) throw new Error("Database connection is missing");
+
+
+      const jsonData = JSON.stringify({
+        biz: datareq.biz,
+        level_part: datareq.level_part,
+      });
+
+
+      const replacements = {
+        jsonData,
+      };
+
+
+      const sql = `DECLARE @json_data NVARCHAR(MAX) = :jsonData;
+      SELECT * FROM SAMPLING_ITEM_MASTER_test WHERE FLAG_ACTIVE = 1
+      `;
+
+
+      const [results] = await db.query(sql, { replacements });
+
+
+      return {
+        status: true,
+        message: "Success",
+        data: results || [],
+      };
+    } catch (error) {
+      console.error("Service getdata_scanin_fg Error:", error);
+      return {
+        status: false,
+        message: error.message || "An error occurred",
+        data: [],
+      };
+    }
+  }
+
+
+  /*async getSamplingToleranceWeight(db, datareq) {
+    try {
+      if (!db) throw new Error("Database connection is missing");
+      console.log("Datareq in service:", datareq);
+
+
+      const results = await db.query(
+        `SELECT
+        i.ITEM_PK,
+        i.LEVEL_PART,
+        j.part,
+        j.tolerance,
+        j.unit,
+        j.flag_active  
+        FROM SAMPLING_ITEM_MASTER_test i
+        CROSS APPLY OPENJSON(i.CONFIG_JSON, '$.tolerance_spec')
+        WITH (
+          part NVARCHAR(100) '$.part',
+          tolerance DECIMAL(10,2) '$.tolerance',
+          unit NVARCHAR(20) '$.unit',
+          flag_active BIT '$.flag_active'
+        ) j
+        WHERE i.FLAG_ACTIVE = 1
+       AND i.BIZ = :biz`,
+        {
+          type: QueryTypes.SELECT,
+          replacements: {
+            biz: datareq.biz,
+          },
+        },
+      );
+      return {
+        status: true,
+        message: "Success",
+        data: results || [],
+      };
+    } catch (error) {
+      console.error("Service getdata_scanin_fg Error:", error);
+      return {
+        status: false,
+        message: error.message || "An error occurred",
+        data: [],
+      };
+    }
+  }*/
+ async getSamplingToleranceWeight(db, datareq) {
+    try {
+      if (!db) throw new Error("Database connection is missing");
+      const jsonData = JSON.stringify({
+        biz: datareq.biz,
+        level_part: datareq.level_part,
+      });
+
+
+      const sql = `EXEC [dbo].[SETTING_SCANIO_GetAll_test]
+          @mode = 1,
+          @json_data = :jsonData;
+      `;
+
+
+      const replacements = {
+        jsonData,
+      };
+
+
+      const [results] = await db.query(sql, { replacements });
+
+
+      return {
+        status: true,
+        message: "Success",
+        data: results || [],
+      };
+    } catch (error) {
+      console.error("Service getdata_scanin_fg Error:", error);
+      return {
+        status: false,
+        message: error.message || "An error occurred",
+        data: [],
+      };
+    }
+  }
+
+
+  /*async getProductcodeAccessory(db, datareq) {
+    try {
+      if (!db) throw new Error("Database connection is missing");
+
+
+      const results = await db.query(
+        `SELECT
+        p.PRODUCT_CODE,
+        j.Body_SN,
+        j.Lens_SN1,
+        j.Lens_SN2,
+        j.Card_Warrantee  
+        FROM SAMPLING_PROCESS_MASTER_test p
+        CROSS APPLY OPENJSON(p.CONFIG_JSON, '$.function_name.scanin.accessory_check')
+        WITH (
+          Body_SN BIT '$.Body_SN',
+          Lens_SN1 BIT '$.Lens_SN1',
+          Lens_SN2 BIT '$.Lens_SN2',
+          Card_Warrantee BIT '$.Card_Warrantee'
+        ) j
+        WHERE p.FLAG_ACTIVE = 1
+       AND p.BIZ = :biz`,
+        {
+          type: QueryTypes.SELECT,
+          replacements: {
+            biz: datareq.biz,
+          },
+        },
+      );
+      return {
+        status: true,
+        message: "Success",
+        data: results || [],
+      };
+    } catch (error) {
+      console.error("Service getdata_scanin_fg Error:", error);
+      return {
+        status: false,
+        message: error.message || "An error occurred",
+        data: [],
+      };
+    }
+  }*/
+ async getProductcodeAccessory(db, datareq) {
+    try {
+      if (!db) throw new Error("Database connection is missing");
+
+
+      const jsonData = JSON.stringify({
+        biz: datareq.biz,
+        level_part: datareq.level_part,
+      });
+
+
+      const sql = `EXEC [dbo].[SETTING_SCANIO_GetAll_test]
+          @mode = 2,
+          @json_data = :jsonData;
+      `;
+
+
+      const replacements = {
+        jsonData,
+      };
+
+
+      const [results] = await db.query(sql, { replacements });
+
+
+      return {
+        status: true,
+        message: "Success",
+        data: results || [],
+      };
+    } catch (error) {
+      console.error("Service getdata_scanin_fg Error:", error);
+      return {
+        status: false,
+        message: error.message || "An error occurred",
+        data: [],
+      };
+    }
+  }
+
+
+  /*async getProductcodeRobbery(db, datareq) {
+    try {
+      if (!db) throw new Error("Database connection is missing");
+
+
+      const results = await db.query(
+        `SELECT
+          PRODUCT_CODE,
+          FLAG_ACTIVE
+          FROM SAMPLING_PROCESS_MASTER_test
+        WHERE FLAG_ACTIVE = 1 AND BIZ = :biz`,
+        {
+          type: QueryTypes.SELECT,
+          replacements: {
+            biz: datareq.biz,
+          },
+        },
+      );
+      return {
+        status: true,
+        message: "Success",
+        data: results || [],
+      };
+    } catch (error) {
+      console.error("Service getdata_scanin_fg Error:", error);
+      return {
+        status: false,
+        message: error.message || "An error occurred",
+        data: [],
+      };
+    }
+  }*/
+ async getProductcodeRobbery(db, datareq) {
+    try {
+      if (!db) throw new Error("Database connection is missing");
+
+
+      const jsonData = JSON.stringify({
+        biz: datareq.biz,
+        level_part: datareq.level_part,
+      });
+
+
+      const sql = `EXEC [dbo].[SETTING_SCANIO_GetAll_test]
+          @mode = 3,
+          @json_data = :jsonData;
+      `;
+
+
+      const replacements = {
+        jsonData,
+      };
+
+
+      const [results] = await db.query(sql, { replacements });
+      return {
+        status: true,
+        message: "Success",
+        data: results || [],
+      };
+    } catch (error) {
+      console.error("Service getdata_scanin_fg Error:", error);
+      return {
+        status: false,
+        message: error.message || "An error occurred",
+        data: [],
+      };
+    }
+  }
+
+
+  /*async putSamplingToleranceWeight(id, datareq) {
+    try {
+      if (!db) throw new Error("Database connection is missing");
+      const { tolerance, unit } = data;
+
+
+      const results = await db
+        .request()
+        .input("id", mssql.Int, id)
+        .input("tolerance", mssql.DECIMAL(10, 2), tolerance)
+        .input("unit", mssql.NVARCHAR(20), unit)
+        .query(`
+        UPDATE SAMPLING_ITEM_MASTER_test
+          SET CONFIG_JSON = JSON_MODIFY(
+            JSON_MODIFY( CONFIG_JSON,
+              '$.items.tolerance_spec.tolerance', @tolerance),
+            '$.items.tolerance_spec.unit', @unit)
+          WHERE FLAG_ACTIVE = 1
+          AND BIZ = :biz; `,
+          {
+            type: QueryTypes.UPDATE,
+            replacements: {
+              biz: datareq.biz,
+            },
+          },
+        );
+
+
+      return {
+        status: true,
+        message: "Success",
+        data: results,
+      };
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+  }*/
+
+
+  async putSamplingToleranceWeight(db, datareq) {
+    try {
+      if (!db) throw new Error("Database connection is missing");
+      const jsonData = JSON.stringify({
+        biz: datareq.biz,
+        level_part: datareq.level_part,
+        //sampling_by: datareq.sampling_by,
+        item_pk: datareq.item_pk,
+      });
+
+
+      const sql = `EXEC [dbo].[SETTING_SCANIO_Update_test]
+          @mode = 1,
+          @json_data = :jsonData;
+      `;
+
+
+      const replacements = {
+        jsonData,
+      };
+
+
+      const [results] = await db.query(sql, { replacements });
+
+
+      return {
+        status: true,
+        message: "Success",
+        data: results[0] || [],
+      };
+    } catch (error) {
+      console.error("Service put data_scanin_fg Error:", error);
+      return {
+        status: false,
+        message: error.message || "An error occurred",
+        data: [],
+      };
+    }
+  }
+
+
+  async insertProductcode(id, datareq) {}
+}
+
+
+module.exports = SettingService;
