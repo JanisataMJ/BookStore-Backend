@@ -9,9 +9,7 @@ const getSamplingProcessMaster = async (req, res, next) => {
       //scanin_by
     };
     const serviceResponse =
-      await settingServiceInstance.getSamplingProcessMaster(
-        queryData,
-      );
+      await settingServiceInstance.getSamplingProcessMaster(queryData);
     const httpStatus = serviceResponse.status ? 200 : 400;
     return res.status(httpStatus).json(serviceResponse);
   } catch (err) {
@@ -156,7 +154,7 @@ const insertProductcodeAccessory = async (req, res) => {
     return res.status(500).json({
       status: false,
       message: "Server error",
-      data: []
+      data: [],
     });
   }
 };
@@ -194,7 +192,45 @@ const insertProductcodeRobbery = async (req, res) => {
     return res.status(500).json({
       status: false,
       message: "Server error",
-      data: []
+      data: [],
+    });
+  }
+};
+
+const uploadExcelFile = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        status: 0,
+        message: "File not found",
+      });
+    }
+
+    const allowedTypes = [
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+    ];
+
+    if (!allowedTypes.includes(req.file.mimetype)) {
+      return res.status(400).json({
+        status: 0,
+        message: "Only Excel files are allowed",
+      });
+    }
+
+    const result = await settingServiceInstance.uploadExcelFile(req.file.path);
+
+    res.json({
+      status: 1,
+      message: "Upload success",
+      data: result,
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(400).json({
+      status: 0,
+      message: error.message || "Upload failed",
     });
   }
 };
@@ -211,4 +247,5 @@ module.exports = {
   insertProductcodeAccessoryItems,
   insertProductcodeAccessory,
   insertProductcodeRobbery,
+  uploadExcelFile,
 };

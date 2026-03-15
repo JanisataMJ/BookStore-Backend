@@ -1,13 +1,15 @@
 const { mssql, mssqlConfig } = require("../config/db");
 
+const XLSX = require("xlsx");
 class SettingService {
-
-   async getSamplingProcessMaster(datareq) {
+  async getSamplingProcessMaster(datareq) {
     try {
       const pool = await mssql.connect(mssqlConfig);
-      const results = await pool.request().query(
-        `SELECT * FROM SAMPLING_PROCESS_MASTER_test WHERE FLAG_ACTIVE = 1`,
-      );
+      const results = await pool
+        .request()
+        .query(
+          `SELECT * FROM SAMPLING_PROCESS_MASTER_test WHERE FLAG_ACTIVE = 1`,
+        );
       return {
         status: true,
         message: "Success",
@@ -295,6 +297,60 @@ class SettingService {
         message: error.message || "An error occurred",
         data: [],
       };
+    }
+  }
+
+  async uploadExcelFile(filePath) {
+    try {
+      const workbook = XLSX.readFile(filePath);
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+
+      const rows = XLSX.utils.sheet_to_json(worksheet);
+
+      const pool = await mssql.connect(mssqlConfig);
+
+      let results = [];
+
+      for (const row of rows) {
+        const jsonData = {
+          Title: row.Book,
+          Author: row.Author,
+          Category: row.Category,
+          Price: row.Price,
+          Stock: row.Stock,
+        };
+
+        const request = pool.request();
+        request.input("mode", mssql.Int, 4);
+        request.input(
+          "json_data",
+          mssql.NVarChar(mssql.MAX),
+          JSON.stringify(jsonData),
+        );
+
+        const result = await request.execute("SETTING_SCANIO_Insert_test");
+
+        //results.push(result.recordset);
+        const sqlResult = result.recordset[0];
+
+        if (!sqlResult) {
+          throw new Error("SQL did not return result");
+        }
+
+        if (sqlResult.status === 0) {
+          throw new Error(sqlResult.message);
+        }
+      }
+
+      return {
+        status: true,
+        message: "Upload success",
+        data: results,
+      };
+    } catch (error) {
+      console.error("Service uploadExcelFile Error:", error);
+      throw error;
     }
   }
 }

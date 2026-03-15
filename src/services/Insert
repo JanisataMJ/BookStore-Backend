@@ -6,11 +6,11 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 ALTER PROCEDURE [dbo].[SETTING_SCANIO_Insert_test]
-	@mode       INT,               
-    @json_data  NVARCHAR(MAX)   
+    @mode       INT,
+    @json_data  NVARCHAR(MAX)
 AS
 BEGIN
-	SET NOCOUNT ON;
+    SET NOCOUNT ON;
     SET XACT_ABORT ON;
 
     -- 1) validate JSON 
@@ -43,25 +43,25 @@ BEGIN
         @config_json NVARCHAR(MAX),
 		@accessory_json NVARCHAR(MAX)
 
-		
-		 -- 4) insert mode
-   IF @mode = 1 -- insert product code accessory (row)
+
+    -- 4) insert mode
+    IF @mode = 1 -- insert product code accessory (row)
 BEGIN
 
-    /* -------------------------------------------------
+        /* -------------------------------------------------
        1. ถ้า product ยังไม่มี → สร้าง row ก่อน
     -------------------------------------------------- */
 
-    IF NOT EXISTS(
+        IF NOT EXISTS(
         SELECT 1
         FROM SAMPLING_PROCESS_MASTER_test
         WHERE biz=@biz
-        AND product_code=@product_code
-        AND level_part=@level_part
+            AND product_code=@product_code
+            AND level_part=@level_part
     )
     BEGIN
 
-        SET @config_json =
+            SET @config_json =
         (
             SELECT
                 JSON_QUERY('{}') scanin,
@@ -70,52 +70,52 @@ BEGIN
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         )
 
-        SET @config_json =
+            SET @config_json =
         (
             SELECT JSON_QUERY(@config_json) function_name
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         )
 
-        INSERT INTO SAMPLING_PROCESS_MASTER_test
-        (
-            biz,
-            level_part,
-            product_code,
-            config_json,
-            created_by,
-            created_date
+            INSERT INTO SAMPLING_PROCESS_MASTER_test
+                (
+                biz,
+                level_part,
+                product_code,
+                config_json,
+                created_by,
+                created_date
+                )
+            VALUES
+                (
+                    @biz,
+                    @level_part,
+                    @product_code,
+                    @config_json,
+                    'admin',
+                    GETDATE()
         )
-        VALUES
-        (
-            @biz,
-            @level_part,
-            @product_code,
-            @config_json,
-            'admin',
-            GETDATE()
-        )
 
-    END
+        END
 
 
-    /* -------------------------------------------------
+        /* -------------------------------------------------
        2. ดึง accessory structure ล่าสุดจาก table
     -------------------------------------------------- */
 
-    SELECT TOP 1
-@accessory_json =
+        SELECT TOP 1
+            @accessory_json =
 JSON_QUERY(config_json,'$.function_name.scanin.accessory_check')
-FROM SAMPLING_PROCESS_MASTER_test
-WHERE JSON_QUERY(config_json,'$.function_name.scanin.accessory_check') IS NOT NULL
+        FROM SAMPLING_PROCESS_MASTER_test
+        WHERE JSON_QUERY(config_json,'$.function_name.scanin.accessory_check') IS NOT NULL
 
-    /* -------------------------------------------------
+        /* -------------------------------------------------
        3. ถ้ายังไม่มี structure เลย → ใช้ default
     -------------------------------------------------- */
 
-    IF @accessory_json IS NULL
+        IF @accessory_json IS NULL
     BEGIN
 
-        SET @accessory_json =
+            SET @accessory_json =
         (
             SELECT
                 @body_sn Body_SN,
@@ -125,13 +125,13 @@ WHERE JSON_QUERY(config_json,'$.function_name.scanin.accessory_check') IS NOT NU
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         )
 
-    END
+        END
 
 
-    /* -------------------------------------------------
+        /* -------------------------------------------------
        4. update scanin + sampling
     -------------------------------------------------- */
-UPDATE SAMPLING_PROCESS_MASTER_test
+        UPDATE SAMPLING_PROCESS_MASTER_test
 SET config_json =
 JSON_MODIFY(
     JSON_MODIFY(
@@ -144,66 +144,67 @@ JSON_MODIFY(
 ),
 update_date = GETDATE()
 WHERE biz=@biz
-AND product_code=@product_code
-AND level_part=@level_part
+            AND product_code=@product_code
+            AND level_part=@level_part
 
-    /* -------------------------------------------------
+        /* -------------------------------------------------
        5. return result
     -------------------------------------------------- */
 
-    SELECT
-        1 status,
-        'scanin updated' message,
-        *
-    FROM SAMPLING_PROCESS_MASTER_test
-    WHERE biz=@biz
-    AND product_code=@product_code
-    AND level_part=@level_part
-END -- end @mode 1
+        SELECT
+            1 status,
+            'scanin updated' message,
+            *
+        FROM SAMPLING_PROCESS_MASTER_test
+        WHERE biz=@biz
+            AND product_code=@product_code
+            AND level_part=@level_part
+    END
+    -- end @mode 1
 
 
 
 
 
-	IF @mode = 2 -- insert item accessory (col)
+    IF @mode = 2 -- insert item accessory (col)
 BEGIN
 
-    DECLARE @column_name NVARCHAR(100)
+        DECLARE @column_name NVARCHAR(100)
 
-    SET @column_name = JSON_VALUE(@json_data,'$.item_name')
+        SET @column_name = JSON_VALUE(@json_data,'$.item_name')
 
-    IF @column_name IS NULL OR @column_name = ''
+        IF @column_name IS NULL OR @column_name = ''
     BEGIN
-        SELECT 
-            0 AS status,
-            'item_name empty' AS message
-        RETURN
-    END
+            SELECT
+                0 AS status,
+                'item_name empty' AS message
+            RETURN
+        END
 
-    --------------------------------------------------
-    -- check duplicate column
-    --------------------------------------------------
-    IF EXISTS (
+        --------------------------------------------------
+        -- check duplicate column
+        --------------------------------------------------
+        IF EXISTS (
         SELECT 1
         FROM SAMPLING_PROCESS_MASTER_test
         WHERE JSON_VALUE(
                 config_json,
                 '$.function_name.scanin.accessory_check.' + @column_name
               ) IS NOT NULL
-        AND biz = @biz
+            AND biz = @biz
     )
     BEGIN
-        SELECT 
-            0 AS status,
-            'duplicate field' AS message
-        RETURN
-    END
+            SELECT
+                0 AS status,
+                'duplicate field' AS message
+            RETURN
+        END
 
 
-    --------------------------------------------------
-    -- update add new column
-    --------------------------------------------------
-    UPDATE SAMPLING_PROCESS_MASTER_test
+        --------------------------------------------------
+        -- update add new column
+        --------------------------------------------------
+        UPDATE SAMPLING_PROCESS_MASTER_test
     SET config_json =
         JSON_MODIFY(
             config_json,
@@ -212,37 +213,38 @@ BEGIN
         ),
         update_date = GETDATE()
     WHERE JSON_QUERY(config_json,'$.function_name.scanin.accessory_check') IS NOT NULL
-    AND biz = @biz
+            AND biz = @biz
 
 
-    --------------------------------------------------
-    -- result
-    --------------------------------------------------
-    SELECT
-        1 AS status,
-        'column added' AS message,
-        @@ROWCOUNT AS updated_rows
+        --------------------------------------------------
+        -- result
+        --------------------------------------------------
+        SELECT
+            1 AS status,
+            'column added' AS message,
+            @@ROWCOUNT AS updated_rows
 
-END -- end mode 2
+    END
+    -- end mode 2
 
 
 
-	IF @mode = 3 -- update robbery by product code
+    IF @mode = 3 -- update robbery by product code
 BEGIN
 
-    IF @flag_active IS NULL
+        IF @flag_active IS NULL
         SET @flag_active = 1
 
 
-    IF NOT EXISTS(
+        IF NOT EXISTS(
         SELECT 1
         FROM SAMPLING_PROCESS_MASTER_test
         WHERE product_code=@product_code
-        AND biz='IM-C'
+            AND biz='IM-C'
     )
     BEGIN
 
-        SET @config_json =
+            SET @config_json =
         (
             SELECT
                 JSON_QUERY('{}') scanin,
@@ -251,37 +253,37 @@ BEGIN
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         )
 
-        SET @config_json =
+            SET @config_json =
         (
             SELECT JSON_QUERY(@config_json) function_name
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         )
 
-        INSERT INTO SAMPLING_PROCESS_MASTER_test
-        (
-            biz,
-            level_part,
-            product_code,
-            flag_active,
-            config_json,
-            created_date,
-            created_by
+            INSERT INTO SAMPLING_PROCESS_MASTER_test
+                (
+                biz,
+                level_part,
+                product_code,
+                flag_active,
+                config_json,
+                created_date,
+                created_by
+                )
+            VALUES
+                (
+                    'IM-C',
+                    @level_part,
+                    @product_code,
+                    @flag_active,
+                    @config_json,
+                    GETDATE(),
+                    'admin'
         )
-        VALUES
-        (
-            'IM-C',
-            @level_part,
-            @product_code,
-            @flag_active,
-            @config_json,
-            GETDATE(),
-            'admin'
-        )
 
-    END
+        END
 
 
-    UPDATE SAMPLING_PROCESS_MASTER_test
+        UPDATE SAMPLING_PROCESS_MASTER_test
 	SET
 	flag_active=@flag_active,
 	config_json =
@@ -297,18 +299,129 @@ BEGIN
 	update_date=GETDATE(),
 	update_by='admin'
 	WHERE product_code=@product_code
-	AND biz='IM-C'
+            AND biz='IM-C'
 
 
-    SELECT
-        1 status,
-        'scanout updated' message,
-        *
-    FROM SAMPLING_PROCESS_MASTER_test
-    WHERE product_code=@product_code
-    AND biz='IM-C'
+        SELECT
+            1 status,
+            'scanout updated' message,
+            *
+        FROM SAMPLING_PROCESS_MASTER_test
+        WHERE product_code=@product_code
+            AND biz='IM-C'
 
-END -- end @mode 3
+    END
+    -- end @mode 3
+
+    IF @mode = 4 -- insert excel book
+	BEGIN
+        ---------------------------------------------------------
+        -- GET DATA FROM JSON
+        ---------------------------------------------------------
+        DECLARE 
+			@TITLE          NVARCHAR(255) = LTRIM(RTRIM(JSON_VALUE(@json_data,'$.Title'))),
+			@AUTHOR_ID      INT = TRY_CONVERT(INT, JSON_VALUE(@json_data,'$.Author')),
+			@CATEGORY_ID    INT = TRY_CONVERT(INT, JSON_VALUE(@json_data,'$.Category')),
+			@PRICE          DECIMAL(10,2) = TRY_CONVERT(DECIMAL(10,2), JSON_VALUE(@json_data,'$.Price')),
+			@STOCK_QTY      INT = TRY_CONVERT(INT, JSON_VALUE(@json_data,'$.Stock'));
+
+        ---------------------------------------------------------
+        -- CHECK REQUIRED COLUMN FROM EXCEL
+        ---------------------------------------------------------
+        IF @TITLE IS NULL OR @TITLE = ''
+		BEGIN
+            SELECT
+                0 AS status,
+                'Column Title missing or empty in Excel' AS message;
+            RETURN;
+        END
+
+        IF @AUTHOR_ID IS NULL
+		BEGIN
+            SELECT
+                0 AS status,
+                'Column Author missing or invalid in Excel' AS message;
+            RETURN;
+        END
+
+        IF @CATEGORY_ID IS NULL
+		BEGIN
+            SELECT
+                0 AS status,
+                'Column Category missing or invalid in Excel' AS message;
+            RETURN;
+        END
+
+        IF @PRICE IS NULL
+		BEGIN
+            SELECT
+                0 AS status,
+                'Column Price missing or invalid in Excel' AS message;
+            RETURN;
+        END
+
+        IF @STOCK_QTY IS NULL
+		BEGIN
+            SELECT
+                0 AS status,
+                'Column Stock missing or invalid in Excel' AS message;
+            RETURN;
+        END
+
+        ---------------------------------------------------------
+        -- CHECK DUPLICATE TITLE
+        ---------------------------------------------------------
+        IF EXISTS
+		(
+			SELECT 1
+        FROM BOOKS
+        WHERE TITLE = @TITLE
+		)
+		BEGIN
+            SELECT
+                0 AS status,
+                'Duplicate book title' AS message,
+                @TITLE AS duplicate_title;
+            RETURN;
+        END
+
+        ---------------------------------------------------------
+        -- INSERT DATA
+        ---------------------------------------------------------
+        SELECT 'INSERT START' AS debug;
+        INSERT INTO BOOKS
+            (
+            TITLE,
+            AUTHOR_ID,
+            CATEGORY_ID,
+            PRICE,
+            STOCK_QTY,
+            CREATED_AT,
+            CREATED_BY,
+            FLAG_USE
+            )
+        VALUES
+            (
+                @TITLE,
+                @AUTHOR_ID,
+                @CATEGORY_ID,
+                @PRICE,
+                @STOCK_QTY,
+                GETDATE(),
+                'admin',
+                1
+		);
+
+        ---------------------------------------------------------
+        -- SUCCESS RESULT
+        ---------------------------------------------------------
+        SELECT
+            1 AS status,
+            'Insert success' AS message,
+            @TITLE AS inserted_title;
+    END
+-- end @mode 4
+
 END;
 
 
